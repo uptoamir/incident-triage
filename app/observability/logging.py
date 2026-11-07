@@ -32,9 +32,9 @@ class CorrelationIdFilter(logging.Filter):
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         out = {
-            "ts": datetime.fromtimestamp(record.created, UTC).isoformat(timespec="milliseconds").replace(
-                "+00:00", "Z"
-            ),
+            "ts": datetime.fromtimestamp(record.created, UTC)
+            .isoformat(timespec="milliseconds")
+            .replace("+00:00", "Z"),
             "level": record.levelname,
             "logger": record.name,
             "correlation_id": getattr(record, "correlation_id", "-"),

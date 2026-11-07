@@ -25,6 +25,13 @@ class AppError(Exception):
             self.code = code
 
 
+class InvalidRequest(AppError):
+    """The client sent something we can't accept (beyond what request-model validation catches)."""
+
+    http_status = 422
+    code = "validation_error"
+
+
 class NotFound(AppError):
     http_status = 404
     code = "not_found"

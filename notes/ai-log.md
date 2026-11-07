@@ -65,3 +65,15 @@ Who decides: Claude made the calls in phases 0–1. From phase 2 on, Claude stop
 - My call: exact 40/20/20/20 environment mix. The exact list gets shuffled by the seeded RNG, so it's still deterministic. A test pins it.
 - My call: keep the 5 planted clusters out of the random filler, so `golden.json` lists every relevant incident and recall numbers mean what they say.
 - My call: keep the vague "needs triage" tickets. Real data has them, and they test that the assistant doesn't invent a fix.
+
+### Phase 4: store, ingest, search
+- Built the SQLite schema (with a standalone FTS5 table written in the same transaction as the row, no triggers), idempotent ingest under `BEGIN IMMEDIATE`, pure `terms.extract` and `query_builder.build`, the search service with `match=auto|all|any`, and the `/ingest`, `/search`, and `/incidents/{id}` routes. `/health` now reports the DB, the incident count, and FTS5.
+- **I broke our own tests-first rule here:** wrote `terms` and `query_builder` before QB1–QB6. To make up for it, I mutated the code to check the tests can fail. Removing the tag dedupe fails QB4. A naive split-on-spaces tokenizer fails QB1, QB2, and QB6. Bonus finding: with the naive tokenizer, the "real FTS5 accepts it" tests still passed, because `fts_literal`'s quote-doubling held on its own. The second layer works independently.
+- **Caught a flaky test by mutating the code:** swapping `BEGIN IMMEDIATE` for plain `BEGIN`, the original two-ingests-at-once test failed only 3 of 5 runs, because it depended on thread timing. A test that catches a bug 60% of the time gives false confidence. Rewrote it with a barrier at the racy spot, right after reading the stored hashes. Now plain `BEGIN` fails 5/5 with `database is locked`, and the real code passes 5/5.
+- Self-review before running, two catches: an `__import__("json")` hack in the search service, and `too_many_records` raising the base error, which would have returned a 500 instead of a 422. Added `InvalidRequest`.
+- The upsert's SET clause was a long hand-typed string. Now it's generated from a column tuple, which also makes "ingested_at is never overwritten" explicit.
+- Ran `ruff format` once over the repo instead of fixing long lines by hand.
+- Real run, 300 records: first ingest 300 new in 28 ms, second 300 skipped in 4.5 ms. All 27 log lines carry `correlation_id`. The sourdough question gets 0 hits, so the LLM is never called. The injection question does retrieve the planted injection ticket, so the guardrails will have to hold.
+- Measured recall on golden.json (5 questions, 4 expected incidents each): 15/20 in the top 8. Tried two fixes on the same set: 12 candidates gave 18/20, and +20 generic stopwords gave 16/20 at 8 (but 17/20 at 12, and it risks overfitting to those 5 questions).
+- My call: send 12 candidates to the LLM instead of 8. The prompt gets about 50% more tokens, and it still fits the context budget.
+- Recorded this and the earlier plan changes in a "Changes during the build" table at the end of PLAN.md, so the spec stays true.

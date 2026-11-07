@@ -1063,3 +1063,15 @@ Sources:
 
 ---
 *End of plan. First action: pre-flight (§16), meaning put the API key in `.env`, then copy this file to `docs/PLAN.md` and start `notes/ai-log.md`.*
+
+---
+
+## Changes during the build
+The sections above are the plan as written before any code. Where the build changed it, the change is recorded here so the spec doesn't go stale. Details are in `notes/ai-log.md`.
+
+| Phase | Section | Change | Why | Call |
+|---|---|---|---|---|
+| 2 | §9.7 | Every LLM HTTP attempt is logged by a request hook at INFO | The SDK logs its retries at DEBUG, so the plan's "retries show in our logs" was wrong | mine |
+| 2 | §9.7, §4.2 | Timeouts use `openai.Timeout`; openai floor is `>=3.0`; httpx2 is a dev dependency | openai v3 runs on httpx2, and an `httpx.Timeout` passed in silently became a broken timeout | mine (httpx2 dep), fix found by tests |
+| 3 | §5.1 | Environment mix is exactly 40/20/20/20 | Seed 42's random draws gave 36/28/23/13 | mine |
+| 4 | §9.2, §11 | `ASSIST_CANDIDATES` 8 → 12 | Measured recall on golden.json: 15/20 at 8, 18/20 at 12 | mine |

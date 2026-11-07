@@ -30,11 +30,22 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def _validation_error(request: Request, exc: RequestValidationError):
-        issues = [_issue(e) for e in exc.errors()]
+        raw = exc.errors()
+        issues = [_issue(e) for e in raw]
+        if raw and all(e.get("type") == "extra_forbidden" and e.get("loc", ("",))[0] == "query" for e in raw):
+            names = ", ".join(i["field"] for i in issues)
+            return error_response(
+                422,
+                "unknown_query_parameter",
+                f"Unknown query parameter: {names}.",
+                ["check the parameter names (see /docs); a typo would otherwise be silently ignored"],
+                issues,
+            )
+        code = "validation_error"
+        if any(tuple(e.get("loc", ()))[:2] == ("path", "incident_id") for e in raw):
+            code = "invalid_incident_id"
         summary = "; ".join(f"{i['field']}: {i['issue']}" for i in issues[:3]) or "invalid request"
-        return error_response(
-            422, "validation_error", summary, ["fix the fields listed in details and retry"], issues
-        )
+        return error_response(422, code, summary, ["fix the fields listed in details and retry"], issues)
 
     @app.exception_handler(StarletteHTTPException)
     async def _http_error(request: Request, exc: StarletteHTTPException):

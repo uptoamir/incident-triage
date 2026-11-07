@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     search_max_query_chars: int = Field(2000, ge=1)
     search_max_terms: int = Field(16, ge=1, le=64)
 
-    assist_candidates: int = Field(8, ge=1, le=20)
+    assist_candidates: int = Field(12, ge=1, le=20)  # 8 gave recall 15/20 on golden.json, 12 gives 18/20
     assist_max_question_chars: int = Field(2000, ge=3)
     assist_max_context_chars: int = Field(12000, ge=1000)
     assist_deadline_seconds: float = Field(45, gt=0)
