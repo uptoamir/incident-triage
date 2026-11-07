@@ -35,6 +35,9 @@ def log_lines():
     handler.addFilter(CorrelationIdFilter())
     handler.setFormatter(JsonFormatter())
     root = logging.getLogger()
+    old_level = root.level
+    root.setLevel(logging.INFO)  # don't depend on some earlier test having called setup_logging
     root.addHandler(handler)
     yield lambda: [json.loads(line) for line in stream.getvalue().splitlines() if line.strip()]
     root.removeHandler(handler)
+    root.setLevel(old_level)

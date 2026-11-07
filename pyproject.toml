@@ -8,7 +8,7 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
-    "openai>=1.40",
+    "openai>=3.0",  # v3 runs on httpx2; the adapter and its tests depend on that
 ]
 
 [dependency-groups]
@@ -16,6 +16,7 @@ dev = [
     "pytest>=8",
     "httpx>=0.27",
     "ruff>=0.6",
+    "httpx2>=2.16.0",
 ]
 
 [tool.pytest.ini_options]

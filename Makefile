@@ -1,4 +1,4 @@
-.PHONY: setup run data test test-live check
+.PHONY: setup run data smoke test test-live check
 
 setup:
 	uv sync
@@ -7,7 +7,10 @@ run:
 	uv run python -m app
 
 data:
-	uv run python scripts/generate_incidents.py --seed 42 --count 300
+	uv run python -m scripts.generate_incidents --seed 42 --count 300
+
+smoke:
+	uv run python -m scripts.llm_smoke
 
 test:
 	uv run pytest -q

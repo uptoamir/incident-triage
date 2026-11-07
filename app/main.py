@@ -8,6 +8,7 @@ from app.api import routes_health
 from app.api.errors import register_exception_handlers
 from app.api.limits import BodySizeLimitMiddleware
 from app.config import Settings, get_settings
+from app.llm.factory import build_llm_client
 from app.observability.correlation import CorrelationIdMiddleware
 from app.observability.logging import setup_logging
 
@@ -20,6 +21,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(title="incident-triage", version="0.1.0")
     app.state.settings = settings
+    app.state.llm = build_llm_client(settings)
     register_exception_handlers(app)
 
     # add_middleware puts the last one added outermost: the correlation id wraps everything
