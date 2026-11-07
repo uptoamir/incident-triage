@@ -139,3 +139,11 @@ Who decides: Claude made the calls in phases 0–1. From phase 2 on, Claude stop
   - Removing the filter from `setup_logging()` now fails the new wiring test, while the 12 old tests still pass, which was exactly the gap.
 - Deadline: a fake-clock test checks the repair call gets 5 s with no retry after a 40 s first call, and that there's no repair call at all with only 1 s left.
 - 131 offline tests pass. The live golden run against the real gpt-4o-mini, now with the stricter check over every model-written string, passes 7/7.
+
+### Phase 7: docs
+- README (exact commands, things worth trying, config, errors, layout), PROMPTS.md (7 real prompts verbatim, plus a slot for the other agents' prompts), AI-NOTES.md, TRADEOFFS.md, and a two-page draw.io: "first read" and "how it grew", one box per commit. Claude drafted them from this log.
+- My call: quote prompt #1 verbatim, persona line included. PROMPTS.md has to be copy/paste, and editing it would misquote.
+- My call: state the real time, about 2 h planning plus about 3 h build, so over the 1–3 h box, and say why: it went on the plan reviews and the code review.
+- Correction (Nov 8): the times above were clock time, read off timestamps. Measured from the session logs, agents were actually working about 1 h 10 min during planning and about 1 h 25 min during the build: about 2.5 hours in total. TRADEOFFS now says so.
+- My call: the diagram shows the first read plus how it grew, not just the architecture.
+- AI-NOTES says plainly that the build mistakes were caught by the workflow's checks (tests, real runs, deliberate breaks, a second model), not by me reading diffs. My part was the setup and the calls.
