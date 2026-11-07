@@ -51,7 +51,8 @@ Best effort (the prompt, temperature 0, a warn-only check for invented numbers a
   - On the golden set, search puts 18 of 20 expected incidents in the 12 it sends to the model, but the model only cites 13. It tends to skip the stage and qa copies of a prod problem. I left the prompt alone, because tuning it on 5 questions would overfit.
 - **The model:**
   - Answers vary from run to run, even at temperature 0. The same question came back `ok` once and `partial` the next time.
-  - `/assist` takes 5–8 s on gpt-4o-mini.
+  - `/assist` usually takes 5–8 s on gpt-4o-mini. One run on the fresh-clone check took 10 s.
+  - The customer draft can repeat a technical detail from the question. Seen live: "due to connection pool exhaustion". It isn't invented, and every draft is flagged for human review, but the prompt doesn't prevent it. I left the prompt as is rather than run another live tuning round this late.
 - **Operations:**
   - Traces live in memory, per process, and are lost on restart.
   - There's no auth on `/ingest` or `/debug/trace`, so turn debug off anywhere shared.

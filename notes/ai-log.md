@@ -147,3 +147,21 @@ Who decides: Claude made the calls in phases 0–1. From phase 2 on, Claude stop
 - Correction (Nov 8): the times above were clock time, read off timestamps. Measured from the session logs, agents were actually working about 1 h 10 min during planning and about 1 h 25 min during the build: about 2.5 hours in total. TRADEOFFS now says so.
 - My call: the diagram shows the first read plus how it grew, not just the architecture.
 - AI-NOTES says plainly that the build mistakes were caught by the workflow's checks (tests, real runs, deliberate breaks, a second model), not by me reading diffs. My part was the setup and the calls.
+
+### Phase 8: fresh-clone check
+- Cloned from GitHub into a scratch folder, exactly what a reviewer gets.
+- Offline: `make setup` works from `uv.lock`, `make test` passes 131, `make check` is clean, and `make data` regenerates the dataset with 0 changed files.
+- Copied `.env.example` to `.env` and set only `LLM_API_KEY`, as the README says. `make smoke` worked, which also proves the inline comments in `.env.example` parse.
+- Ran every README command as written:
+  - ingest twice: 300 ingested, then 300 skipped
+  - search, incident lookup, `/assist` (`ok`, 3 planted incidents cited, every quote verified), and the trace (all 6 steps)
+- Ran every "worth trying" item:
+  - the sourdough question never reaches the LLM
+  - `env=prod` gets a 422 `unknown_query_parameter`
+  - replaying the search gives exactly the `/assist` candidates
+  - a second server with no key returns a 503 with what to set and the 12 retrieved incidents, while `/search` still works
+- 0 of 32 log lines lack `correlation_id`. `make test-live` from the clone passes 7/7. The clone, with its `.env`, was deleted afterwards.
+- Seen live: the guardrail dropped a third general step, as designed.
+- Seen live: one `/assist` call took 10 s, more than the 5–8 s measured before.
+- Seen live: the customer draft repeated "due to connection pool exhaustion" from the question.
+- My call: note the draft wording in TRADEOFFS and rely on the human-review flag. No prompt change this late.
