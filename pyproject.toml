@@ -31,3 +31,7 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# long template strings in the generator's data table; wrapping them hurts readability
+"scripts/generate_incidents.py" = ["E501"]

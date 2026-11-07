@@ -54,3 +54,14 @@ Who decides: Claude made the calls in phases 0–1. From phase 2 on, Claude stop
 - My call: default model stays gpt-4o-mini. It's faster, cheaper, and takes temperature 0.
 - My call: log every attempt via the hook, instead of DEBUG noise or our own retry loop.
 - My call: declare httpx2 as a dev dependency, since the tests import it, and raise the openai floor to >=3.0 to match.
+
+### Phase 3: data
+- Built the `Incident` model, which does the normalizing: UTC timestamps, case for enums and services, and tags trimmed, deduped, and sorted. Also a seeded generator, `golden.json` built from the planted clusters, and a hand-written 12-record test fixture.
+- Generator rules: one `random.Random(seed)`, and every choice goes through `rng.random()`, since Python only promises that stays the same across versions. Two runs are byte-identical, and DG1 also checks the output against the committed file.
+- **Caught by reading the output, not the tests:** a sample said "Starting 5:00 UTC". The template wasn't zero-padding the hour. Fixed.
+- **Looked like a bug, wasn't:** the environment mix came out 36/28/23/13 against a plan of 40/20/20/20. Checked the weighted pick over 100k draws (40/20/20/20) and spied on the filler loop's draws (they match the output). So the code was fine; it's just how seed 42 lands on 280 draws. Turned it into a decision instead of a "fix".
+- Claude decided: service names are lowercased on ingest (`Payroll-Engine` becomes `payroll-engine`) rather than rejected. Flagged it for me to overrule.
+- Ruff E501 on the generator's template strings: added a per-file ignore in pyproject, where it's visible, instead of wrapping the templates.
+- My call: exact 40/20/20/20 environment mix. The exact list gets shuffled by the seeded RNG, so it's still deterministic. A test pins it.
+- My call: keep the 5 planted clusters out of the random filler, so `golden.json` lists every relevant incident and recall numbers mean what they say.
+- My call: keep the vague "needs triage" tickets. Real data has them, and they test that the assistant doesn't invent a fix.
