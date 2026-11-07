@@ -50,4 +50,10 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(StarletteHTTPException)
     async def _http_error(request: Request, exc: StarletteHTTPException):
         code = {404: "not_found", 405: "method_not_allowed"}.get(exc.status_code, "http_error")
-        return error_response(exc.status_code, code, str(exc.detail), headers=getattr(exc, "headers", None))
+        hint = {
+            404: ["check the path; the endpoints are listed at /docs"],
+            405: ["check the HTTP method; the endpoints are listed at /docs"],
+        }.get(exc.status_code, ["see /docs"])
+        return error_response(
+            exc.status_code, code, str(exc.detail), hint, headers=getattr(exc, "headers", None)
+        )

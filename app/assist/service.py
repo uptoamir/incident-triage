@@ -18,6 +18,7 @@ from app.search.repository import IncidentRepository
 from app.search.service import SearchRequest, SearchService
 
 log = logging.getLogger("app.assist")
+MIN_CALL_SECONDS = 2.0  # less time than this left for a call isn't worth spending
 
 
 def default_questions(filters: dict) -> list[str]:
@@ -33,11 +34,19 @@ def default_questions(filters: dict) -> list[str]:
 
 
 class AssistService:
-    def __init__(self, search: SearchService, repo: IncidentRepository, llm: LLMClient, settings: Settings):
+    def __init__(
+        self,
+        search: SearchService,
+        repo: IncidentRepository,
+        llm: LLMClient,
+        settings: Settings,
+        clock=time.monotonic,  # injectable so a test can drive the deadline
+    ):
         self.search = search
         self.repo = repo
         self.llm = llm
         self.settings = settings
+        self.clock = clock
 
     def assist(self, question: str, filters: SearchFilters, trace: Trace) -> dict:
         applied = filters.summary()
@@ -103,6 +112,7 @@ class AssistService:
                 mode=self.settings.guardrail_mode,
                 id_pattern=self.settings.incident_id_pattern,
                 default_questions=default_questions(applied),
+                known_ids=retrieval["candidate_ids"],
             )
             s.output = {
                 "kept": answer["citations"],
@@ -126,7 +136,9 @@ class AssistService:
     def _ask_llm(
         self, question: str, applied: dict, ctx: Context, trace: Trace
     ) -> tuple[AssistLLMOutput, dict]:
-        deadline = time.monotonic() + self.settings.assist_deadline_seconds
+        # ASSIST_DEADLINE_SECONDS is a hard cap on all LLM time, SDK retries included: each call gets
+        # remaining / (retries + 1) per try, and the repair call runs with no SDK retry at all
+        deadline = self.clock() + self.settings.assist_deadline_seconds
         user = build_user_message(question, applied, ctx.text)
         meta = {
             "provider": self.llm.provider,
@@ -138,13 +150,15 @@ class AssistService:
         }
         problem = ""
         for attempt in (1, 2):
+            retries = self.settings.llm_max_retries if attempt == 1 else 0
+            per_try = min(self.settings.llm_timeout_seconds, (deadline - self.clock()) / (retries + 1))
+            if per_try < MIN_CALL_SECONDS:
+                raise LLMInvalidOutput(
+                    "The model's answer couldn't be used, and there's no time left to ask again.",
+                    how_to_fix=["retry", "or raise ASSIST_DEADLINE_SECONDS"],
+                    details={"reason": "deadline", "problem": problem},
+                )
             if attempt == 2:
-                if deadline - time.monotonic() < self.settings.llm_timeout_seconds:
-                    raise LLMInvalidOutput(
-                        "The model's answer couldn't be used, and there's no time left to ask again.",
-                        how_to_fix=["retry"],
-                        details={"reason": "schema", "problem": problem},
-                    )
                 user += REPAIR_NOTE.format(problem=problem)
             meta["attempts"] = attempt
             with trace.step(
@@ -156,11 +170,18 @@ class AssistService:
                     "prompt_version": PROMPT_VERSION,
                     "json_mode": self.settings.llm_json_mode,
                     "prompt_chars": len(SYSTEM_PROMPT) + len(user),
+                    "timeout_s": round(per_try, 1),
+                    "sdk_retries": retries,
                 },
             ) as s:
                 try:
                     result = self.llm.complete_json(
-                        SYSTEM_PROMPT, user, ASSIST_SCHEMA, schema_name="assist_output"
+                        SYSTEM_PROMPT,
+                        user,
+                        ASSIST_SCHEMA,
+                        schema_name="assist_output",
+                        timeout_s=per_try,
+                        max_retries=retries,
                     )
                 except LLMInvalidOutput as exc:
                     if exc.details.get("reason") == "truncated" or attempt == 2:
@@ -171,7 +192,7 @@ class AssistService:
                 meta["model"] = result.model
                 meta["latency_ms"] = round(meta["latency_ms"] + result.latency_ms, 1)
                 for k in ("input", "output"):
-                    meta["tokens"][k] += result.usage.get(k, 0)
+                    meta["tokens"][k] += result.usage.get(k) or 0
                 s.output = {
                     "latency_ms": result.latency_ms,
                     "tokens": result.usage,

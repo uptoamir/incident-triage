@@ -104,3 +104,38 @@ Who decides: Claude made the calls in phases 0–1. From phase 2 on, Claude stop
 - Claude decided (I asked it to make this one): keep `GUARDRAIL_MODE=strict` as the default. On this data it costs nothing and keeps the guarantee.
 - My call: accept 5–8 s per /assist call. Tightening output risks cut-off answers.
 - My call: leave the prompt as is, rather than nudging it to cite more incidents. Picking fewer when unsure fits grounding-first, and tuning on 5 questions would overfit. Goes in TRADEOFFS.
+
+### Phase 6: hardening and an independent review
+- Added the missing limit tests: ingest record cap, question and `q` length, offset, tag count, unknown body keys, context budget, and a record trying to close its own `<incident>` block.
+- **Independent review:** a second model (Sonnet), in a fresh session with no context from this one. Instructions: review against PLAN.md and CLAUDE.md, report file:line findings only, edit nothing, never read `.env` or call the LLM. It came back with 14 findings, several reproduced with scratch mutations. I checked each against the code: 13 were real, and the 14th (docs missing) was just the next phase.
+- **The serious one:** model-written text could still carry an uncited incident ID into the answer, in three ways:
+  - an invented second evidence quote, which shipped flagged because the first quote verified
+  - clarifying questions, which were never scanned
+  - an ID written with a lookalike Unicode dash, `INC‑99999` (U+2011)
+- And my own GR4 test literally asserted the first behavior, so the test had encoded the bug.
+- **Tests that couldn't fail:**
+  - The logging tests used a fixture with its own filter, so they tested the filter class, not `setup_logging()`. Deleting the filter from the app left everything green.
+  - The key-leak canary started with `sk-`, which the scrub regex matches by construction.
+- **Smaller real bugs:**
+  - Malformed provider responses became 500s. An empty usage block crashed the token sum *after* a successful, paid call.
+  - `/health` could 500, and it returned 200 "degraded" on a broken DB.
+  - An `INCIDENT_ID_PATTERN` with a capture group broke the scan, and a bad regex only failed at request time.
+  - JSON-object mode never showed the model the schema.
+  - `^...$` with `.match()` accepted a correlation ID ending in `\n`.
+  - Some errors had an empty `how_to_fix`.
+  - IDs that differ only by case could resolve to the wrong record.
+  - `SEARCH_DEFAULT_LIMIT` was unused, the 32-character tag rule wasn't enforced on filters, and ignored ingest fields weren't counted.
+- My call: keep `guardrails.dropped` as an audit trail of removed IDs, IDs only, and stop echoing model text in warnings.
+- My call: make `ASSIST_DEADLINE_SECONDS` a hard cap. Each try gets remaining / (retries + 1), and the repair call has no SDK retry.
+- My call: fix all 13 now.
+- Fixes:
+  - One sanitizer runs over every model-written string. It folds lookalike dashes, strips zero-width characters, catches IDs by the configured pattern plus an exact match on every retrieved ID, and in strict mode returns only verified quotes.
+  - IDs resolve exactly first, and case-insensitively only when that's unambiguous.
+  - Defensive response parsing, `usage or 0`, scrubbing of the exact configured key, provider failures logged once (scrubbed), and the schema shown in JSON-object mode.
+  - Per-call timeout and retry overrides, the pattern validated at startup, `/health` returning 503 and logging the cause, `fullmatch`, and `how_to_fix` everywhere.
+- **Proved the new tests can fail:**
+  - Removing the dash folding fails GR9 in both modes.
+  - Removing the exact-ID scan fails the any-shape-ID test.
+  - Removing the filter from `setup_logging()` now fails the new wiring test, while the 12 old tests still pass, which was exactly the gap.
+- Deadline: a fake-clock test checks the repair call gets 5 s with no retry after a 40 s first call, and that there's no repair call at all with only 1 s left.
+- 131 offline tests pass. The live golden run against the real gpt-4o-mini, now with the stricter check over every model-written string, passes 7/7.

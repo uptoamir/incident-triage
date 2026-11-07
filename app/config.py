@@ -1,9 +1,10 @@
 """All configuration, read from environment variables (and an optional .env)."""
 
+import re
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, SecretStr, ValidationError, model_validator
+from pydantic import Field, SecretStr, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -53,6 +54,18 @@ class Settings(BaseSettings):
     max_request_bytes: int = Field(5_242_880, ge=1024)
     debug_endpoints_enabled: bool = True
     trace_store_max: int = Field(500, ge=10)
+
+    @field_validator("incident_id_pattern")
+    @classmethod
+    def _valid_id_pattern(cls, v: str) -> str:
+        # checked at startup, not at request time after a paid LLM call
+        try:
+            compiled = re.compile(v)
+        except re.error as exc:
+            raise ValueError(f"not a valid regular expression ({exc})") from exc
+        if compiled.groups:
+            raise ValueError("must not contain capturing groups; use (?:...) instead")
+        return v
 
     @model_validator(mode="after")
     def _check_consistency(self) -> "Settings":

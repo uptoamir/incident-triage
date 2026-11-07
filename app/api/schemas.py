@@ -1,10 +1,10 @@
 """HTTP request models. Character limits live here, not in the services (PLAN §7.1)."""
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.domain.models import SERVICE_PATTERN, Environment, Severity
+from app.domain.models import SERVICE_PATTERN, TAG_PATTERN, Environment, Severity
 from app.search.query_builder import SearchFilters
 
 
@@ -16,7 +16,7 @@ class FilterFields(BaseModel):
     environment: Environment | None = None
     service: str | None = Field(default=None, pattern=SERVICE_PATTERN)
     severity: Severity | None = None
-    tags: list[str] = Field(default_factory=list, max_length=10)
+    tags: list[Annotated[str, Field(pattern=TAG_PATTERN)]] = Field(default_factory=list, max_length=10)
 
     @field_validator("environment", "service", mode="before")
     @classmethod
@@ -53,7 +53,7 @@ class SearchParams(FilterFields):
     # extra="forbid" (inherited): a typo like env=prod is a 422, not a silently ignored filter
     q: str = Field(min_length=1, max_length=2000)
     match: Literal["auto", "all", "any"] = "auto"
-    limit: int = Field(10, ge=1, le=200)  # tightened at runtime to SEARCH_MAX_LIMIT
+    limit: int | None = Field(None, ge=1, le=200)  # None: SEARCH_DEFAULT_LIMIT; capped at SEARCH_MAX_LIMIT
     offset: int = Field(0, ge=0, le=1000)
 
 

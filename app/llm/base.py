@@ -20,7 +20,14 @@ class LLMClient(Protocol):
     model: str | None
 
     def complete_json(
-        self, system: str, user: str, schema: dict, *, schema_name: str, timeout_s: float | None = None
+        self,
+        system: str,
+        user: str,
+        schema: dict,
+        *,
+        schema_name: str,
+        timeout_s: float | None = None,
+        max_retries: int | None = None,
     ) -> LLMResult: ...
 
     def describe(self) -> dict: ...

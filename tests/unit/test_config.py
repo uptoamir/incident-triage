@@ -32,3 +32,11 @@ def test_unknown_provider_fails_at_startup(monkeypatch):
 def test_missing_llm_vars_are_named():
     s = Settings(_env_file=None, llm_api_key=None, llm_provider="azure-openai")
     assert s.llm_missing_vars() == ["LLM_API_KEY", "AZURE_OPENAI_ENDPOINT"]
+
+
+def test_incident_id_pattern_is_checked_at_startup():
+    with pytest.raises(ValidationError, match="capturing groups"):
+        Settings(_env_file=None, incident_id_pattern=r"(?i)\b(INC|TKT)-\d+\b")
+    with pytest.raises(ValidationError, match="regular expression"):
+        Settings(_env_file=None, incident_id_pattern="[")
+    assert Settings(_env_file=None, incident_id_pattern=r"(?i)\b(?:INC|TKT)-\d+\b")

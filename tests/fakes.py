@@ -38,12 +38,26 @@ class FakeLLMClient:
     def __init__(self, *script):
         self.script = list(script)
         self.calls: list[dict] = []
+        self.on_call = None  # optional hook(call_number), e.g. to move a fake clock forward
 
     def describe(self) -> dict:
         return {"provider": self.provider, "model": self.model, "configured": True, "missing": []}
 
-    def complete_json(self, system, user, schema, *, schema_name, timeout_s=None) -> LLMResult:
-        self.calls.append({"system": system, "user": user, "schema": schema, "schema_name": schema_name})
+    def complete_json(
+        self, system, user, schema, *, schema_name, timeout_s=None, max_retries=None
+    ) -> LLMResult:
+        self.calls.append(
+            {
+                "system": system,
+                "user": user,
+                "schema": schema,
+                "schema_name": schema_name,
+                "timeout_s": timeout_s,
+                "max_retries": max_retries,
+            }
+        )
+        if self.on_call:
+            self.on_call(len(self.calls))
         item = self.script.pop(0) if len(self.script) > 1 else self.script[0]
         if isinstance(item, Exception):
             raise item

@@ -20,22 +20,24 @@ def search(
     settings: Annotated[Settings, Depends(get_settings_dep)],
     trace: Annotated[Trace, Depends(get_trace)],
 ) -> dict:
-    if params.limit > settings.search_max_limit:
+    limit = params.limit or settings.search_default_limit
+    if limit > settings.search_max_limit:
         raise InvalidRequest(
             f"limit must be between 1 and {settings.search_max_limit}.",
             how_to_fix=[f"use limit<={settings.search_max_limit}, or raise SEARCH_MAX_LIMIT"],
         )
     if len(params.q) > settings.search_max_query_chars:
-        raise InvalidRequest(f"q is longer than {settings.search_max_query_chars} characters.")
+        raise InvalidRequest(
+            f"q is longer than {settings.search_max_query_chars} characters.",
+            how_to_fix=["shorten q", "or raise SEARCH_MAX_QUERY_CHARS"],
+        )
 
     filters = params.to_filters()
     with trace.step(
-        "tool:search", {"filters": filters.summary(), "match": params.match, "limit": params.limit}
+        "tool:search", {"filters": filters.summary(), "match": params.match, "limit": limit}
     ) as s:
         result = service.search(
-            SearchRequest(
-                q=params.q, filters=filters, match=params.match, limit=params.limit, offset=params.offset
-            )
+            SearchRequest(q=params.q, filters=filters, match=params.match, limit=limit, offset=params.offset)
         )
         s.input["terms"] = result.terms
         s.output = {
@@ -49,7 +51,7 @@ def search(
         "match_mode": result.match_mode,
         "filters": filters.summary(),
         "total": result.total,
-        "limit": params.limit,
+        "limit": limit,
         "offset": params.offset,
         "notes": result.notes,
         "results": result.hits,

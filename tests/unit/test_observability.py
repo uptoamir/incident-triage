@@ -1,3 +1,4 @@
+import io
 import json
 import logging
 import re
@@ -7,7 +8,8 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
-from app.observability.logging import JsonFormatter
+from app.observability.correlation import _pick_id, correlation_id_var
+from app.observability.logging import _MARK, JsonFormatter, setup_logging
 
 HEX32 = re.compile(r"^[0-9a-f]{32}$")
 
@@ -85,3 +87,38 @@ def test_unknown_route_uses_the_envelope(client):
     r = client.get("/nope")
     assert r.status_code == 404
     assert r.json()["error"]["code"] == "not_found"
+
+
+# --- found by the independent review ---
+
+
+def test_setup_logging_puts_the_id_on_lines_from_every_logger():
+    # The log_lines fixture adds its own filter, so the tests above prove the filter class, not the
+    # app's wiring: deleting the filter from setup_logging() left them green. This checks the real handler.
+    logging.getLogger("uvicorn.error").addHandler(
+        logging.StreamHandler(io.StringIO())
+    )  # like the uvicorn CLI
+    setup_logging("INFO", "json")
+    handler = next(h for h in logging.getLogger().handlers if getattr(h, _MARK, False))
+    stream = io.StringIO()
+    old = handler.setStream(stream)
+    token = correlation_id_var.set("cid-real")
+    try:
+        for name in ("app.anything", "uvicorn.error", "openai", "httpx"):
+            logging.getLogger(name).warning("from %s", name)
+    finally:
+        correlation_id_var.reset(token)
+        handler.setStream(old)
+    lines = [json.loads(line) for line in stream.getvalue().splitlines()]
+    assert {line["msg"]: line["correlation_id"] for line in lines} == {
+        f"from {name}": "cid-real" for name in ("app.anything", "uvicorn.error", "openai", "httpx")
+    }
+    for name in ("uvicorn", "uvicorn.error"):
+        assert logging.getLogger(name).handlers == [] and logging.getLogger(name).propagate
+    assert logging.getLogger("uvicorn.access").disabled
+
+
+def test_correlation_id_with_a_trailing_newline_is_refused():
+    # re's "$" matches before a trailing "\n", so ^...$ with .match() accepted "abc\n"
+    cid, replaced = _pick_id([(b"x-correlation-id", b"abc\n")])
+    assert replaced and HEX32.match(cid)

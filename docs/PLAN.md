@@ -1075,3 +1075,11 @@ The sections above are the plan as written before any code. Where the build chan
 | 2 | §9.7, §4.2 | Timeouts use `openai.Timeout`; openai floor is `>=3.0`; httpx2 is a dev dependency | openai v3 runs on httpx2, and an `httpx.Timeout` passed in silently became a broken timeout | mine (httpx2 dep), fix found by tests |
 | 3 | §5.1 | Environment mix is exactly 40/20/20/20 | Seed 42's random draws gave 36/28/23/13 | mine |
 | 4 | §9.2, §11 | `ASSIST_CANDIDATES` 8 → 12 | Measured recall on golden.json: 15/20 at 8, 18/20 at 12 | mine |
+| 5 | §9.5 | G2 checks against the incidents the model was shown (after the context budget), not every retrieved one | A model can't cite what it never saw | Claude |
+| 5 | §10.4 | `/search` and `/ingest` record trace steps too | `/debug/trace` works for every endpoint | Claude |
+| 5 | §11 | `GUARDRAIL_MODE` stays `strict` | 0 of 16 cited incidents failed the quote check in 14 live calls | Claude, at my request |
+| 6 | §9.5 | The invariant covers every model-written string (quotes and clarifying questions too), after folding lookalike dashes; retrieved ids of any shape are caught by exact match; strict mode returns only verified quotes | The independent review found three ways an uncited id could get through, and tests that only looked at 4 fields | fix found by review |
+| 6 | §9.8 | `guardrails.dropped` stays as an audit trail (ids only); warnings no longer echo model text | Debuggability, without echoing model prose | mine |
+| 6 | §9.7 | `ASSIST_DEADLINE_SECONDS` is a hard cap: each try gets remaining / (retries + 1), the repair call has no SDK retry | A request could run about 65 s against a documented 45 s | mine |
+| 6 | §9.7 | JSON-object mode puts the schema in the system prompt | Without it, the fallback mode leaned on the repair call | fix found by review |
+| 6 | §11, §8.2 | `INCIDENT_ID_PATTERN` is validated at startup; `/health` returns 503 when the DB is unusable | A capture group broke the id scan; a broken DB still looked healthy to probes | fixes found by review |

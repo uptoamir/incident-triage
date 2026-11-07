@@ -10,7 +10,7 @@ from contextvars import ContextVar
 log = logging.getLogger("app.http")
 
 correlation_id_var: ContextVar[str] = ContextVar("correlation_id", default="-")
-_VALID_ID = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
+_VALID_ID = re.compile(r"[A-Za-z0-9._:-]{1,128}")  # used with fullmatch: "$" would accept "abc\n"
 
 
 def get_correlation_id() -> str:
@@ -29,7 +29,7 @@ def _pick_id(headers: list[tuple[bytes, bytes]]) -> tuple[str, bool]:
             value = sent.decode("ascii")
         except UnicodeDecodeError:
             value = ""
-        if _VALID_ID.match(value):
+        if _VALID_ID.fullmatch(value):
             return value, False
     return uuid.uuid4().hex, sent is not None
 

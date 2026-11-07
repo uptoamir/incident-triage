@@ -44,7 +44,7 @@ class Database:
             with closing(self.connect()) as conn:
                 _check_fts5(conn)
             return True
-        except RuntimeError:
+        except (RuntimeError, sqlite3.Error):
             return False
 
 

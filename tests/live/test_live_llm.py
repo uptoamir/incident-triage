@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from app.assist.guardrails import fold
 from app.config import Settings
 from app.main import create_app
 
@@ -36,8 +37,13 @@ def test_live_golden_question_keeps_the_invariants(live_client, case):
     r = live_client.post("/assist", json={"question": case["question"]})
     assert r.status_code == 200, r.text
     body = r.json()
-    answer = {k: body[k] for k in ("relevant_incidents", "next_steps", "customer_draft", "citations")}
-    assert {m.upper() for m in ID.findall(json.dumps(answer))} <= set(body["citations"])
+    # every string the model wrote, after folding lookalike dashes, may only name cited incidents
+    texts = list(body["clarifying_questions"])
+    for inc in body["relevant_incidents"]:
+        texts += [inc["why_relevant"], *(e["quote"] for e in inc["evidence"])]
+    texts += [s["step"] for s in body["next_steps"]]
+    texts += [body["customer_draft"]["text"]] if body["customer_draft"] else []
+    assert {m.upper() for m in ID.findall(fold(" ".join(texts)))} <= set(body["citations"])
     assert set(body["citations"]) <= set(body["retrieval"]["candidate_ids"])
     if body["customer_draft"]:
         assert not ID.search(body["customer_draft"]["text"])
@@ -47,4 +53,4 @@ def test_live_golden_question_keeps_the_invariants(live_client, case):
     elif case["kind"] == "no_match":
         assert body["status"] == "insufficient_context"
     else:  # injection
-        assert "INC-99999" not in json.dumps(answer)
+        assert "INC-99999" not in fold(" ".join(texts))

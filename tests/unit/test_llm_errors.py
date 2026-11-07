@@ -161,15 +161,73 @@ def test_bad_output_is_invalid_output_with_a_reason(content, finish, reason):
     assert exc.value.details["reason"] == reason
 
 
-def test_ll3_key_never_leaks_into_errors_or_logs(log_lines):
-    # providers sometimes echo the key back in the error message
-    body = {"error": {"message": f"Incorrect API key provided: {CANARY}", "type": "invalid_request_error"}}
-    for status in (400, 401):
-        with pytest.raises((LLMAuthError, LLMBadRequest)) as exc:
-            _call(_client(lambda req, s=status: httpx2.Response(s, json=body)))
-        err = exc.value
-        assert CANARY not in json.dumps({"m": err.message, "h": err.how_to_fix, "d": err.details})
-    assert all(CANARY not in json.dumps(line) for line in log_lines())
+# no sk- prefix on purpose: the old canary matched the scrub regex by construction, so it could never fail
+PLAIN_CANARY = "canary-azure-style-key-0123456789abcdef"
+
+
+@pytest.mark.parametrize(
+    ("status", "error"), [(400, LLMBadRequest), (401, LLMAuthError), (429, LLMRateLimited)]
+)
+def test_ll3_key_never_leaks_into_errors_or_logs(log_lines, status, error):
+    body = {
+        "error": {"message": f"Incorrect API key provided: {PLAIN_CANARY}", "type": "invalid_request_error"}
+    }
+    with pytest.raises(error) as exc:
+        _call(_client(lambda req: httpx2.Response(status, json=body), llm_api_key=PLAIN_CANARY))
+    err = exc.value
+    assert PLAIN_CANARY not in json.dumps({"m": err.message, "h": err.how_to_fix, "d": err.details})
+    logged = [line for line in log_lines() if line["event"] == "llm.error"]
+    assert logged, "provider failures are logged, so the no-leak check below isn't vacuous"
+    assert all(PLAIN_CANARY not in json.dumps(line) for line in log_lines())
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx2.Response(200, text="<html>bad gateway</html>", headers={"content-type": "text/html"}),
+        httpx2.Response(200, json={"choices": []}),
+        httpx2.Response(200, json={}),
+    ],
+)
+def test_malformed_provider_response_is_a_typed_error_not_a_500(response):
+    with pytest.raises(LLMUnavailable):
+        _call(_client(lambda req: response))
+
+
+@pytest.mark.parametrize("usage", [{}, None])
+def test_missing_usage_counts_as_zero_tokens(usage):
+    completion = _completion()
+    if usage is None:
+        completion.pop("usage")
+    else:
+        completion["usage"] = usage
+    result = _call(_client(lambda req: httpx2.Response(200, json=completion)))
+    assert result.usage == {"input": 0, "output": 0}
+
+
+def test_json_object_mode_shows_the_model_the_schema():
+    seen = {}
+
+    def handler(req):
+        seen.update(json.loads(req.content))
+        return httpx2.Response(200, json=_completion())
+
+    _call(_client(handler, llm_json_mode="json_object"))
+    system = seen["messages"][0]["content"]
+    assert "JSON schema" in system and '"ok"' in system
+
+
+def test_per_call_timeout_and_retry_overrides_are_applied():
+    seen = []
+
+    def handler(req):
+        seen.append(req.extensions["timeout"]["read"])
+        return httpx2.Response(500, json={"error": {"message": "boom"}})
+
+    client = _client(handler, llm_max_retries=1)
+    with pytest.raises(LLMUnavailable):
+        client.complete_json("s", "u", SCHEMA, schema_name="t", timeout_s=3.0, max_retries=0)
+    assert seen == [3.0]  # one try only, with the per-call timeout
 
 
 def test_every_attempt_is_logged_with_the_correlation_id(log_lines):

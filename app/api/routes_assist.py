@@ -21,6 +21,9 @@ def assist(
     trace: Annotated[Trace, Depends(get_trace)],
 ) -> dict:
     if len(body.question) > settings.assist_max_question_chars:
-        raise InvalidRequest(f"question is longer than {settings.assist_max_question_chars} characters.")
+        raise InvalidRequest(
+            f"question is longer than {settings.assist_max_question_chars} characters.",
+            how_to_fix=["shorten the question", "or raise ASSIST_MAX_QUESTION_CHARS"],
+        )
     result = service.assist(body.question, body.filters.to_filters(), trace)
     return {**result, "correlation_id": get_correlation_id()}

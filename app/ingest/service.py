@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import logging
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,6 +14,7 @@ from app.domain.errors import DataSourceError, InvalidRequest
 from app.domain.models import Incident
 from app.search.repository import IncidentRepository
 
+log = logging.getLogger("app.ingest")
 MAX_REPORTED_ERRORS = 20
 
 
@@ -59,11 +61,15 @@ class IngestService:
             )
 
         valid, errors, seen = [], [], set()
+        ignored: dict[str, int] = {}  # unknown fields are ignored, not rejected, but counted
+        known = set(Incident.model_fields)
         for index, item in enumerate(raw):
             item_id = item.get("id") if isinstance(item, dict) else None
             if not isinstance(item, dict):
                 errors.append({"index": index, "id": None, "reason": "not a JSON object"})
                 continue
+            for key in item.keys() - known:
+                ignored[key] = ignored.get(key, 0) + 1
             try:
                 incident = Incident.model_validate(item)
             except ValidationError as exc:
@@ -89,6 +95,11 @@ class IngestService:
             **counts,
             "invalid": len(errors),
             "errors": errors[:MAX_REPORTED_ERRORS],
+            "ignored_fields": dict(sorted(ignored.items())),
             "duration_ms": round((time.perf_counter() - started) * 1000, 1),
         }
+        if ignored:
+            log.info(
+                "ingest ignored unknown fields", extra={"event": "ingest.unknown_fields", "fields": ignored}
+            )
         return result
