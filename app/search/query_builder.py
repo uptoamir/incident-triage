@@ -22,6 +22,21 @@ class SearchFilters:
     severity: str | None = None
     tags: tuple[str, ...] = ()
 
+    def summary(self) -> dict:
+        """Only the filters that were actually set, for responses and logs."""
+        out = {
+            k: v
+            for k, v in (
+                ("environment", self.environment),
+                ("service", self.service),
+                ("severity", self.severity),
+            )
+            if v
+        }
+        if self.tags:
+            out["tags"] = sorted(set(self.tags))
+        return out
+
 
 @dataclass(frozen=True)
 class CompiledQuery:

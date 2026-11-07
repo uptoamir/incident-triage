@@ -4,7 +4,7 @@ import logging
 
 from fastapi import FastAPI
 
-from app.api import routes_health, routes_incidents, routes_ingest, routes_search
+from app.api import routes_assist, routes_debug, routes_health, routes_incidents, routes_ingest, routes_search
 from app.api.errors import register_exception_handlers
 from app.api.limits import BodySizeLimitMiddleware
 from app.config import Settings, get_settings
@@ -12,6 +12,7 @@ from app.ingest.service import IngestService
 from app.llm.factory import build_llm_client
 from app.observability.correlation import CorrelationIdMiddleware
 from app.observability.logging import setup_logging
+from app.observability.trace import TraceStore
 from app.search.db import Database
 from app.search.repository import SqliteIncidentRepository
 from app.search.service import SearchService
@@ -34,14 +35,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.search_service = SearchService(repo, settings)
     app.state.ingest_service = IngestService(repo, settings)
     app.state.llm = build_llm_client(settings)
+    app.state.trace_store = TraceStore(settings.trace_store_max)
     register_exception_handlers(app)
 
     # add_middleware puts the last one added outermost: the correlation id wraps everything
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_request_bytes)
     app.add_middleware(CorrelationIdMiddleware)
 
-    for module in (routes_health, routes_ingest, routes_search, routes_incidents):
+    for module in (routes_health, routes_ingest, routes_search, routes_incidents, routes_assist):
         app.include_router(module.router)
+    if settings.debug_endpoints_enabled:
+        app.include_router(routes_debug.router)
 
     if missing := settings.llm_missing_vars():
         log.warning(

@@ -48,10 +48,6 @@ class FilterFields(BaseModel):
             tags=tuple(self.tags),
         )
 
-    def summary(self) -> dict:
-        """Only the filters that were actually set, for responses and logs."""
-        return {k: v for k, v in self.model_dump(mode="json").items() if v not in (None, [])}
-
 
 class SearchParams(FilterFields):
     # extra="forbid" (inherited): a typo like env=prod is a 422, not a silently ignored filter
@@ -60,8 +56,12 @@ class SearchParams(FilterFields):
     limit: int = Field(10, ge=1, le=200)  # tightened at runtime to SEARCH_MAX_LIMIT
     offset: int = Field(0, ge=0, le=1000)
 
-    def summary(self) -> dict:
-        return FilterFields.model_validate(self.model_dump(include=set(FilterFields.model_fields))).summary()
+
+class AssistRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    question: str = Field(min_length=3, max_length=2000)  # tightened at runtime to ASSIST_MAX_QUESTION_CHARS
+    filters: FilterFields = Field(default_factory=FilterFields)  # the same filter model /search uses
 
 
 class IngestBody(BaseModel):

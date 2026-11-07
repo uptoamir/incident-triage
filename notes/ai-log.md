@@ -77,3 +77,30 @@ Who decides: Claude made the calls in phases 0–1. From phase 2 on, Claude stop
 - Measured recall on golden.json (5 questions, 4 expected incidents each): 15/20 in the top 8. Tried two fixes on the same set: 12 candidates gave 18/20, and +20 generic stopwords gave 16/20 at 8 (but 17/20 at 12, and it risks overfitting to those 5 questions).
 - My call: send 12 candidates to the LLM instead of 8. The prompt gets about 50% more tokens, and it still fits the context budget.
 - Recorded this and the earlier plan changes in a "Changes during the build" table at the end of PLAN.md, so the spec stays true.
+
+### Phase 5: /assist
+- Built:
+  - a trace recorder and store
+  - the strict output schema, generated from pydantic
+  - the `assist-v1` prompt
+  - a context builder with truncation, a character budget, and blocks a record can't break out of
+  - guardrails as pure functions
+  - `AssistService`: no LLM call on zero hits, one repair attempt within the deadline, retrieved candidates attached to every LLM error
+  - `/assist` and `/debug/trace/{id}`
+- `/search` and `/ingest` now record trace steps too.
+- **Tests first, for real this time:** wrote GR1–GR8 before `guardrails.py` existed, and collection failed on the missing module. Then implemented it, and all 8 pass.
+- Mutation-checked four guardrails, and each break was caught by the test aimed at it:
+  - G3 checking the *retrieved* set instead of the *kept* set (the exact round-2 review bug): GR2 fails.
+  - Ignoring the model's "nothing relevant" flag: GR6 fails.
+  - Accepting 1-word quotes: GR4 fails.
+  - Leaving IDs in the customer draft: GR2 and GR7 fail.
+- **Layering slip caught in review:** `AssistService` imported `FilterFields` from the API layer, which breaks the rule that services don't depend on `api/`. Moved the filter summary onto the plain `SearchFilters` dataclass, which also removed two helper methods.
+- My scratch script for the live comparison failed at first: it couldn't import `app` from outside the repo. Ran it with `PYTHONPATH=.`.
+- **Live golden run** (real gpt-4o-mini, 300 records): 7/7 golden questions keep every invariant. That means no invented IDs, no IDs in the customer draft, the nonsense question short-circuits, and INC-99999 never appears for the injection question.
+- Strict vs lenient across 14 live calls: 0 of 16 cited incidents had a quote that failed verification.
+- The model cited 13/20 planted matches, while search gave it 18/20. It tends to skip the stage and qa copies of a prod problem.
+- 5–8 s per call, about 400–600 output and 2.2–2.6k input tokens.
+- Same question, two runs, temperature 0: `ok` with 3 cited once, `partial` with 2 the next. That's why offline tests use the fake, and the live test checks invariants only.
+- Claude decided (I asked it to make this one): keep `GUARDRAIL_MODE=strict` as the default. On this data it costs nothing and keeps the guarantee.
+- My call: accept 5–8 s per /assist call. Tightening output risks cut-off answers.
+- My call: leave the prompt as is, rather than nudging it to cite more incidents. Picking fewer when unsure fits grounding-first, and tuning on 5 questions would overfit. Goes in TRADEOFFS.

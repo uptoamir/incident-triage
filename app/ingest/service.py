@@ -2,7 +2,6 @@
 
 import hashlib
 import json
-import logging
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -14,7 +13,6 @@ from app.domain.errors import DataSourceError, InvalidRequest
 from app.domain.models import Incident
 from app.search.repository import IncidentRepository
 
-log = logging.getLogger("app.ingest")
 MAX_REPORTED_ERRORS = 20
 
 
@@ -93,15 +91,4 @@ class IngestService:
             "errors": errors[:MAX_REPORTED_ERRORS],
             "duration_ms": round((time.perf_counter() - started) * 1000, 1),
         }
-        log.info(
-            "ingest: %(ingested)s new, %(updated)s updated, %(skipped)s skipped",
-            counts,
-            extra={
-                "event": "ingest.upsert",
-                "source": source,
-                "received": len(raw),
-                "invalid": len(errors),
-                **counts,
-            },
-        )
         return result
