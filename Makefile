@@ -1,4 +1,4 @@
-.PHONY: setup run data smoke test test-live check
+.PHONY: setup run data smoke test test-live check ui test-ui
 
 setup:
 	uv sync
@@ -20,3 +20,9 @@ test-live:
 
 check:
 	uv run ruff check . && uv run pytest -q
+
+ui:
+	uv run --group ui streamlit run ui/app.py
+
+test-ui:
+	uv run --group ui pytest -q -m ui

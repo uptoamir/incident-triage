@@ -165,3 +165,24 @@ Who decides: Claude made the calls in phases 0–1. From phase 2 on, Claude stop
 - Seen live: one `/assist` call took 10 s, more than the 5–8 s measured before.
 - Seen live: the customer draft repeated "due to connection pool exhaustion" from the question.
 - My call: note the draft wording in TRADEOFFS and rely on the human-review flag. No prompt change this late.
+
+### UI demo (ui-demo branch only)
+Prompts (verbatim):
+> based on ~/Interview/incident-triage-take-home.md do you suggest we create a  UI using pythiong for this to understand the task and show full capabilities of each apis better?
+
+> ok, create the branch and write the visual ui to show each api full capabilities shown in the ui
+
+- Claude advised against a UI in the submission. The brief doesn't grade one, we were already past the time box, Streamlit pulls in heavy dependencies, and FastAPI's `/docs` already lets you try every endpoint. It suggested `/docs` examples and a `make demo` instead, and said a UI for the interview should live on its own branch.
+- My call: build it anyway, on the `ui-demo` branch, to walk through the project in the interview. `main` stays the submission.
+- Claude decided: Streamlit, in an optional `ui` dependency group, so `make setup` and the core dependencies don't change. The UI talks to the API only over HTTP and never imports `app/`, so each screen shows what a real client gets: the curl command, the correlation ID and the raw JSON.
+- `make test-ui` runs 6 tests that click through the UI headless with Streamlit's AppTest, against the running API. One of them calls the real LLM. They're marked `ui`, so `make test` stays offline.
+- **Caught by the first test run:** AppTest resolves a relative script path against the test file, not the repo root, so it couldn't find the app. Made the path absolute.
+- **Caught on a re-read, before it showed:** Streamlit "magic" writes any bare expression to the page, so a conditional expression used as a statement could put a stray `None` on screen. Rewrote those as if/else.
+- **Caught in the browser, not by the tests:** the sidebar's "Recent requests" lagged one click behind. Streamlit runs the script top to bottom, so the sidebar was drawn before the button handlers added the new request. Moved it to the end of the script, added an assertion that the request shows up on the same click, and checked that moving the block back fails it.
+- **Looked flaky, wasn't:** on the final run the assist test failed once, then passed on a rerun. A pass after a fail isn't an answer, so Claude checked the logs:
+  - The server log showed that LLM call took 16.7 s of process time but almost 6 minutes of wall time.
+  - The power log showed the Mac went to sleep (lid closed) 4 s into the call.
+  - AppTest's 120 s timeout counts wall time.
+  - Not a code bug. A clean full run passed 6/6.
+- `make test` reported "1 skipped" without the ui group installed, because the UI test file skipped itself on import. Moved the Streamlit import into the tests, so `make test` reports the same result either way.
+- Seen live: one `/assist` call took 12.4 s, so the spinner now says 5–15 s.

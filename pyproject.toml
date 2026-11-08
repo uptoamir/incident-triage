@@ -18,12 +18,19 @@ dev = [
     "ruff>=0.6",
     "httpx2>=2.16.0",
 ]
+ui = [
+    "httpx>=0.28.1",
+    "streamlit>=1.67.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-markers = ["live: calls the real LLM (needs LLM_API_KEY); run with `make test-live`"]
-addopts = "-m 'not live'"
+markers = [
+    "live: calls the real LLM (needs LLM_API_KEY); run with `make test-live`",
+    "ui: drives the Streamlit UI against a running API (`make run`); run with `make test-ui`",
+]
+addopts = "-m 'not live and not ui'"
 
 [tool.ruff]
 line-length = 110
@@ -35,3 +42,5 @@ select = ["E", "F", "I", "B", "UP"]
 [tool.ruff.lint.per-file-ignores]
 # long template strings in the generator's data table; wrapping them hurts readability
 "scripts/generate_incidents.py" = ["E501"]
+# the UI's overview table is long rows of copy text inside one string
+"ui/app.py" = ["E501"]

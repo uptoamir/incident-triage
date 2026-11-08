@@ -45,11 +45,35 @@ Worth trying:
 - `/search?q=timeout&env=prod` gives a 422 `unknown_query_parameter`, because a typo shouldn't be silently ignored.
 - To replay what `/assist` searched: `/search?q=<the question>&match=any&limit=12`.
 
+## Visual tour (ui-demo branch only)
+
+A small Streamlit app that drives every endpoint through the real API. It's for walking through the project. `main` is the submission.
+
+```bash
+make run   # the API, in one terminal
+make ui    # the UI, in another: http://localhost:8501
+```
+
+Every request panel shows the exact curl command, its correlation ID and the raw JSON.
+
+| Tab | What it shows |
+|---|---|
+| Overview | Each part of the brief, and which tab shows it |
+| Ingest | Run it twice (the second run skips all 300), or send a batch with bad records and an unknown field |
+| Search | Presets for all-words matching, the any-word fallback, filters, hostile input and filler-only queries. "Full record" on any hit |
+| Incident | One record, plus the 404 and 422 cases |
+| Assist | The golden questions as presets. Shows verified quotes, next steps with their sources, the customer draft, what the guardrails removed, what search found, and LLM timing and tokens. "Replay the search" checks that `/search` returns the same candidates. "Show the trace" opens the request's steps |
+| Trace | The step log for any correlation ID |
+| Errors & limits | 13 bad requests, one button each, all returning the error envelope |
+
+The sidebar shows API health (DB, FTS5, incident count, whether the LLM is set up) and the last 12 requests. Streamlit sits in an optional `ui` dependency group, so `make setup` and `make test` don't need it.
+
 ## Tests
 
 ```bash
 make test        # 131 tests, offline, no key needed (fake LLM, temp SQLite)
 make test-live   # the 7 golden questions against the real LLM; checks invariants, not wording
+make test-ui     # 6 tests that click through the UI against the running API (ui-demo branch)
 make check       # ruff + tests
 ```
 
@@ -118,7 +142,8 @@ app/assist         prompt, context, guardrails, the /assist pipeline
 app/llm            OpenAI / Azure adapter
 app/observability  correlation id, JSON logs, traces
 scripts/           data generator, LLM smoke test
-tests/             unit, integration, live
+ui/                Streamlit visual tour (ui-demo branch only)
+tests/             unit, integration, live, ui
 docs/PLAN.md       the spec, plus a "changes during the build" table
 docs/planning/     how the plan was made (4 plans, 2 review rounds)
 docs/diagrams/     how-it-grew.drawio (open in app.diagrams.net)
